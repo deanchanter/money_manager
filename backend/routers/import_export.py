@@ -21,6 +21,7 @@ async def import_csv(
     transaction_type_column: str = "",  # Optional column for credit/debit (e.g., Capital One)
     source: str = "bank",  # bank, credit_card, cash, investment
     sign_convention: str = "standard",  # standard (neg=expense), inverted (pos=expense for amex-style), or type_column
+    account_id: Optional[int] = None,  # Link transactions to an account
     db: Session = Depends(get_db)
 ):
     """
@@ -145,12 +146,26 @@ async def import_csv(
             if not category_id:
                 category_id = auto_categorize(description)
             
+            # Check for duplicate (same date, description, amount, AND account)
+            dup_query = db.query(Transaction).filter(
+                Transaction.date == transaction_date,
+                Transaction.description == description,
+                Transaction.amount == amount
+            )
+            if account_id:
+                dup_query = dup_query.filter(Transaction.account_id == account_id)
+            
+            if dup_query.first():
+                errors.append(f"Row {idx + 2}: Duplicate transaction skipped")
+                continue
+            
             # Create transaction
             transaction = Transaction(
                 date=transaction_date,
                 description=description,
                 amount=amount,
                 category_id=category_id,
+                account_id=account_id,
                 source=source,
                 sign_convention=sign_convention
             )
@@ -162,10 +177,12 @@ async def import_csv(
     
     db.commit()
     
+    skipped = len([e for e in errors if "Duplicate" in e])
     return {
-        "message": f"Successfully imported {imported} transactions",
+        "message": f"Successfully imported {imported} transactions ({skipped} duplicates skipped)",
         "imported": imported,
-        "errors": errors[:10] if errors else []  # Return first 10 errors
+        "skipped": skipped,
+        "errors": errors[:10] if errors else []
     }
 
 @router.get("/export/csv")
@@ -265,3 +282,46 @@ def export_report(
         media_type="text/plain",
         headers={"Content-Disposition": f"attachment; filename=report_{datetime.now().strftime('%Y%m%d')}.txt"}
     )
+
+@router.post("/import/learned-categories")
+def restore_learned_categories(db: Session = Depends(get_db)):
+    """Restore learned category rules from data/learned_categories.json"""
+    import json
+    import os
+    
+    json_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "data", "learned_categories.json")
+    
+    if not os.path.exists(json_path):
+        raise HTTPException(status_code=404, detail="learned_categories.json not found in data folder")
+    
+    with open(json_path, 'r') as f:
+        rules_data = json.load(f)
+    
+    imported = 0
+    skipped = 0
+    
+    for rule in rules_data:
+        existing = db.query(AutoCategoryRule).filter(
+            AutoCategoryRule.pattern == rule['pattern'],
+            AutoCategoryRule.category_id == rule['category_id']
+        ).first()
+        
+        if existing:
+            skipped += 1
+            continue
+        
+        db.add(AutoCategoryRule(
+            pattern=rule['pattern'],
+            match_type=rule.get('match_type', 'contains'),
+            category_id=rule['category_id'],
+            priority=rule.get('priority', 0)
+        ))
+        imported += 1
+    
+    db.commit()
+    
+    return {
+        "message": f"Restored {imported} learned category rules ({skipped} already existed)",
+        "imported": imported,
+        "skipped": skipped
+    }

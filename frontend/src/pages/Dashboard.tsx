@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [accountSummary, setAccountSummary] = useState<AccountSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -23,6 +24,7 @@ export default function Dashboard() {
 
   const loadStats = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [year, month] = selectedMonth.split('-').map(Number);
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -35,8 +37,10 @@ export default function Dashboard() {
       ]);
       setStats(monthData);
       setAccountSummary(summaryData);
-    } catch (error) {
-      console.error('Failed to load dashboard stats:', error);
+    } catch (err) {
+      console.error('Failed to load dashboard stats:', err);
+      setError('Failed to connect to server. Please check if the backend is running.');
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -57,10 +61,16 @@ export default function Dashboard() {
     );
   }
 
-  if (!stats) {
+  if (error || !stats) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Failed to load dashboard data</p>
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="text-red-600 font-medium">{error || 'Failed to load dashboard data'}</div>
+        <button
+          onClick={loadStats}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }

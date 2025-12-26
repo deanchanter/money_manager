@@ -68,9 +68,19 @@ class TransactionUpdate(BaseModel):
     sign_convention: Union[str, None] = None
     notes: Union[str, None] = None
 
+class AccountBrief(BaseModel):
+    id: int
+    name: str
+    icon: str
+
+    class Config:
+        from_attributes = True
+
 class TransactionResponse(TransactionBase):
     id: int
+    account_id: Optional[int] = None
     category: Optional[CategoryResponse] = None
+    account: Optional[AccountBrief] = None
 
     class Config:
         from_attributes = True

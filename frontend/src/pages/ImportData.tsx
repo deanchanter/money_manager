@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { importCSV } from '../services/api';
+import { useState, useEffect } from 'react';
+import { importCSV, getAccounts } from '../services/api';
+import type { Account } from '../types';
 
 export default function ImportData() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ imported: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{ imported: number; skipped?: number; errors: string[] } | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [options, setOptions] = useState({
     date_column: 'date',
     description_column: 'description',
@@ -13,7 +15,12 @@ export default function ImportData() {
     transaction_type_column: '',
     source: 'bank',
     sign_convention: 'standard',
+    account_id: undefined as number | undefined,
   });
+
+  useEffect(() => {
+    getAccounts().then(setAccounts).catch(console.error);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -111,6 +118,25 @@ export default function ImportData() {
               ))}
             </div>
           </div>
+
+          {accounts.length > 0 && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Link to Account (recommended)</label>
+              <select
+                value={options.account_id || ''}
+                onChange={(e) => setOptions({ ...options, account_id: e.target.value ? Number(e.target.value) : undefined })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
+              >
+                <option value="">-- No account (don't track balance) --</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.icon} {account.name} ({account.account_type})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Link transactions to an account to track balances on the dashboard</p>
+            </div>
+          )}
 
           {options.source === 'credit_card' && (
             <div className="mb-4">
@@ -218,7 +244,10 @@ export default function ImportData() {
           <div className={`mt-6 p-4 rounded-lg ${result.imported > 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
             {result.imported > 0 ? (
               <div className="text-green-800">
-                <p className="font-medium">Successfully imported {result.imported} transactions!</p>
+                <p className="font-medium">
+                  Successfully imported {result.imported} transactions!
+                  {result.skipped ? ` (${result.skipped} duplicates skipped)` : ''}
+                </p>
               </div>
             ) : (
               <div className="text-red-800">

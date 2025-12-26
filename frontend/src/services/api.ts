@@ -20,7 +20,7 @@ export const updateCategory = (id: number, data: Partial<Category>) => api.put<C
 export const deleteCategory = (id: number) => api.delete(`/categories/${id}`);
 
 // Transactions
-export const getTransactions = (params?: { start_date?: string; end_date?: string; category_id?: number; limit?: number }) => 
+export const getTransactions = (params?: { start_date?: string; end_date?: string; category_id?: number | string; limit?: number }) => 
   api.get<Transaction[]>('/transactions', { params: { limit: 500, ...params } }).then(res => res.data);
 export const createTransaction = (data: Partial<Transaction>) => api.post<Transaction>('/transactions', data).then(res => res.data);
 export const updateTransaction = (id: number, data: Partial<Transaction>) => api.put<Transaction>(`/transactions/${id}`, data).then(res => res.data);
@@ -54,7 +54,7 @@ export const getAllTimeBalance = (startingBalance: number = 0) =>
   ).then(res => res.data);
 
 // Import/Export
-export const importCSV = (file: File, options: { date_column: string; description_column: string; amount_column: string; category_column: string; transaction_type_column: string; source: string; sign_convention: string }) => {
+export const importCSV = (file: File, options: { date_column: string; description_column: string; amount_column: string; category_column: string; transaction_type_column: string; source: string; sign_convention: string; account_id?: number }) => {
   const formData = new FormData();
   formData.append('file', file);
   return api.post('/import/csv', formData, {

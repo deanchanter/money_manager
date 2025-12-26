@@ -14,7 +14,7 @@ def get_transactions(
     limit: int = 100,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    category_id: Optional[int] = None,
+    category_id: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaction)
@@ -23,8 +23,10 @@ def get_transactions(
         query = query.filter(Transaction.date >= start_date)
     if end_date:
         query = query.filter(Transaction.date <= end_date)
-    if category_id:
-        query = query.filter(Transaction.category_id == category_id)
+    if category_id == 'null':
+        query = query.filter(Transaction.category_id.is_(None))
+    elif category_id:
+        query = query.filter(Transaction.category_id == int(category_id))
     
     return query.order_by(Transaction.date.desc()).offset(skip).limit(limit).all()
 
