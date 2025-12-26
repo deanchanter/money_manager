@@ -14,23 +14,28 @@ def calculate_budget_stats(budget: Budget, db: Session) -> dict:
     """Calculate spent amount and other stats for a budget"""
     year, month = map(int, budget.month.split("-"))
     
-    # Get expenses: negative amounts (standard) OR positive amounts from credit cards (inverted)
-    standard_spent = db.query(func.sum(func.abs(Transaction.amount))).filter(
+    # Get all transactions for this category/month
+    # Note: We don't exclude by description keywords since categorized PayPal/Venmo 
+    # transactions are real expenses. Only Transfer/Credit Card Payment categories are excluded.
+    transactions = db.query(Transaction).filter(
         Transaction.category_id == budget.category_id,
-        Transaction.amount < 0,
         extract('year', Transaction.date) == year,
         extract('month', Transaction.date) == month
-    ).scalar() or 0.0
+    ).all()
     
-    inverted_spent = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.category_id == budget.category_id,
-        Transaction.amount > 0,
-        Transaction.sign_convention == 'inverted',
-        extract('year', Transaction.date) == year,
-        extract('month', Transaction.date) == month
-    ).scalar() or 0.0
+    spent = 0.0
+    for t in transactions:
+        is_credit_card = t.source == 'credit_card'
+        is_inverted = t.sign_convention == 'inverted'
+        
+        if is_credit_card:
+            if is_inverted and t.amount > 0:
+                spent += t.amount
+            elif not is_inverted and t.amount < 0:
+                spent += abs(t.amount)
+        elif t.amount < 0:
+            spent += abs(t.amount)
     
-    spent = standard_spent + inverted_spent
     remaining = budget.amount - spent
     percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
     
@@ -137,24 +142,26 @@ def get_category_spending_history(category_id: int, months: int, db: Session) ->
         target_date = today - relativedelta(months=i+1)
         year, month = target_date.year, target_date.month
         
-        # Standard expenses (negative amounts)
-        standard = db.query(func.sum(func.abs(Transaction.amount))).filter(
+        transactions = db.query(Transaction).filter(
             Transaction.category_id == category_id,
-            Transaction.amount < 0,
             extract('year', Transaction.date) == year,
             extract('month', Transaction.date) == month
-        ).scalar() or 0.0
+        ).all()
         
-        # Credit card expenses (positive amounts with inverted sign)
-        inverted = db.query(func.sum(Transaction.amount)).filter(
-            Transaction.category_id == category_id,
-            Transaction.amount > 0,
-            Transaction.sign_convention == 'inverted',
-            extract('year', Transaction.date) == year,
-            extract('month', Transaction.date) == month
-        ).scalar() or 0.0
+        month_spent = 0.0
+        for t in transactions:
+            is_credit_card = t.source == 'credit_card'
+            is_inverted = t.sign_convention == 'inverted'
+            
+            if is_credit_card:
+                if is_inverted and t.amount > 0:
+                    month_spent += t.amount
+                elif not is_inverted and t.amount < 0:
+                    month_spent += abs(t.amount)
+            elif t.amount < 0:
+                month_spent += abs(t.amount)
         
-        spending.append(standard + inverted)
+        spending.append(month_spent)
     
     return spending
 

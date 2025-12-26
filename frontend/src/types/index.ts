@@ -38,10 +38,12 @@ export interface Transaction {
   description: string;
   amount: number;
   category_id: number | null;
+  account_id: number | null;
   source: string;
   sign_convention: string;
   notes: string;
   category: Category | null;
+  account: { id: number; name: string; icon: string } | null;
 }
 
 export interface Budget {

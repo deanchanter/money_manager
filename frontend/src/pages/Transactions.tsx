@@ -9,6 +9,7 @@ export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -35,25 +36,30 @@ export default function Transactions() {
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [year, month] = selectedMonth.split('-').map(Number);
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
       
-      const params: { start_date: string; end_date: string; category_id?: number } = {
+      const params: { start_date: string; end_date: string; category_id?: number | string } = {
         start_date: startDate,
         end_date: endDate,
       };
-      if (filterCategory) {
+      if (filterCategory === 'uncategorized') {
+        params.category_id = 'null';
+      } else if (filterCategory) {
         params.category_id = parseInt(filterCategory);
       }
       
       const [txns, cats] = await Promise.all([getTransactions(params), getCategories()]);
       setTransactions(txns);
       setCategories(cats);
-    } catch (error) {
-      console.error('Failed to load data:', error);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setError('Failed to connect to server. Please check if the backend is running.');
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -145,6 +151,20 @@ export default function Transactions() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="text-red-600 font-medium">{error}</div>
+        <button
+          onClick={loadData}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -170,6 +190,7 @@ export default function Transactions() {
           className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
         >
           <option value="">All Categories</option>
+          <option value="uncategorized">Uncategorized</option>
           {categories.map(cat => (
             <option key={cat.id} value={cat.id}>
               {cat.icon} {cat.name}
@@ -195,6 +216,7 @@ export default function Transactions() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
@@ -202,7 +224,7 @@ export default function Transactions() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredTransactions.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                   No transactions found for this period.
                 </td>
               </tr>
@@ -250,6 +272,13 @@ export default function Transactions() {
                       </span>
                     ) : (
                       <span className="text-gray-400">Uncategorized</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    {transaction.account ? (
+                      <span>{transaction.account.icon} {transaction.account.name}</span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
                     )}
                   </td>
                   <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${
