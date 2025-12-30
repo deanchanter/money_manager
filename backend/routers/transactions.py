@@ -8,7 +8,7 @@ from schemas import TransactionCreate, TransactionResponse, TransactionUpdate
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
-@router.get("/", response_model=List[TransactionResponse])
+@router.get("", response_model=List[TransactionResponse])
 def get_transactions(
     skip: int = 0,
     limit: int = 100,
@@ -37,7 +37,7 @@ def get_transaction(transaction_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Transaction not found")
     return transaction
 
-@router.post("/", response_model=TransactionResponse)
+@router.post("", response_model=TransactionResponse)
 def create_transaction(transaction: TransactionCreate, db: Session = Depends(get_db)):
     db_transaction = Transaction(**transaction.model_dump())
     
@@ -129,6 +129,51 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
     db.delete(db_transaction)
     db.commit()
     return {"message": "Transaction deleted"}
+
+@router.post("/bulk-update")
+def bulk_update_transactions(
+    updates: dict,
+    db: Session = Depends(get_db)
+):
+    """Bulk update multiple transactions with the same values"""
+    transaction_ids = updates.get("transaction_ids", [])
+    update_data = updates.get("data", {})
+    
+    if not transaction_ids:
+        raise HTTPException(status_code=400, detail="No transaction IDs provided")
+    
+    allowed_fields = ['category_id', 'notes']
+    filtered_data = {k: v for k, v in update_data.items() if k in allowed_fields}
+    
+    if not filtered_data:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    
+    updated_count = db.query(Transaction).filter(
+        Transaction.id.in_(transaction_ids)
+    ).update(filtered_data, synchronize_session='fetch')
+    
+    db.commit()
+    
+    return {"message": f"Updated {updated_count} transactions", "updated_count": updated_count}
+
+@router.post("/bulk-delete")
+def bulk_delete_transactions(
+    data: dict,
+    db: Session = Depends(get_db)
+):
+    """Bulk delete multiple transactions"""
+    transaction_ids = data.get("transaction_ids", [])
+    
+    if not transaction_ids:
+        raise HTTPException(status_code=400, detail="No transaction IDs provided")
+    
+    deleted_count = db.query(Transaction).filter(
+        Transaction.id.in_(transaction_ids)
+    ).delete(synchronize_session='fetch')
+    
+    db.commit()
+    
+    return {"message": f"Deleted {deleted_count} transactions", "deleted_count": deleted_count}
 
 def auto_categorize(description: str, db: Session) -> Optional[int]:
     """Auto-categorize based on learned rules and category keywords"""

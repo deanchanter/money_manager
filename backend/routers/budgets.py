@@ -11,8 +11,11 @@ from schemas import BudgetCreate, BudgetResponse
 router = APIRouter(prefix="/api/budgets", tags=["budgets"])
 
 def calculate_budget_stats(budget: Budget, db: Session) -> dict:
-    """Calculate spent amount and other stats for a budget"""
+    """Calculate spent/earned amount and other stats for a budget"""
     year, month = map(int, budget.month.split("-"))
+    
+    # Check if this is an income category
+    is_income_category = budget.category.is_income if budget.category else False
     
     # Get all transactions for this category/month
     # Note: We don't exclude by description keywords since categorized PayPal/Venmo 
@@ -23,31 +26,38 @@ def calculate_budget_stats(budget: Budget, db: Session) -> dict:
         extract('month', Transaction.date) == month
     ).all()
     
-    spent = 0.0
+    amount = 0.0
     for t in transactions:
         is_credit_card = t.source == 'credit_card'
         is_inverted = t.sign_convention == 'inverted'
         
-        if is_credit_card:
-            if is_inverted and t.amount > 0:
-                spent += t.amount
-            elif not is_inverted and t.amount < 0:
-                spent += abs(t.amount)
-        elif t.amount < 0:
-            spent += abs(t.amount)
+        if is_income_category:
+            # For income, count positive amounts
+            if t.amount > 0:
+                amount += t.amount
+        else:
+            # For expenses, count negative amounts (or positive for inverted credit cards)
+            if is_credit_card:
+                if is_inverted and t.amount > 0:
+                    amount += t.amount
+                elif not is_inverted and t.amount < 0:
+                    amount += abs(t.amount)
+            elif t.amount < 0:
+                amount += abs(t.amount)
     
-    remaining = budget.amount - spent
-    percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
+    remaining = budget.amount - amount
+    percentage = (amount / budget.amount * 100) if budget.amount > 0 else 0
     
     return {
-        "spent": round(spent, 2),
+        "spent": round(amount, 2),
         "remaining": round(remaining, 2),
         "percentage": round(percentage, 2),
-        "is_over_budget": spent > budget.amount,
-        "is_alert": percentage >= (budget.alert_threshold * 100)
+        "is_over_budget": amount > budget.amount if not is_income_category else False,
+        "is_alert": percentage >= (budget.alert_threshold * 100),
+        "is_income": is_income_category
     }
 
-@router.get("/", response_model=List[BudgetResponse])
+@router.get("", response_model=List[BudgetResponse])
 def get_budgets(month: str = None, db: Session = Depends(get_db)):
     if not month:
         month = datetime.now().strftime("%Y-%m")
@@ -70,7 +80,7 @@ def get_budgets(month: str = None, db: Session = Depends(get_db)):
     
     return result
 
-@router.post("/", response_model=BudgetResponse)
+@router.post("", response_model=BudgetResponse)
 def create_budget(budget: BudgetCreate, db: Session = Depends(get_db)):
     # Check if budget already exists for this category/month
     existing = db.query(Budget).filter(
@@ -166,11 +176,35 @@ def get_category_spending_history(category_id: int, months: int, db: Session) ->
     return spending
 
 
+def get_category_income_history(category_id: int, months: int, db: Session) -> List[float]:
+    """Get income history for a category over past N months"""
+    income = []
+    today = datetime.now()
+    
+    for i in range(months):
+        target_date = today - relativedelta(months=i+1)
+        year, month = target_date.year, target_date.month
+        
+        transactions = db.query(Transaction).filter(
+            Transaction.category_id == category_id,
+            extract('year', Transaction.date) == year,
+            extract('month', Transaction.date) == month
+        ).all()
+        
+        month_income = 0.0
+        for t in transactions:
+            if t.amount > 0:
+                month_income += t.amount
+        
+        income.append(month_income)
+    
+    return income
+
+
 @router.get("/suggestions")
 def get_budget_suggestions(months: int = 3, db: Session = Depends(get_db)):
     """Suggest budget amounts based on past spending averages"""
     categories = db.query(Category).filter(
-        Category.is_income == False,
         ~Category.name.ilike('%transfer%'),
         ~Category.name.ilike('%payment%')
     ).all()
@@ -222,15 +256,14 @@ def auto_create_budgets(
         target_months = sorted([r[0] for r in result if r[0]], reverse=True)
     
     categories = db.query(Category).filter(
-        Category.is_income == False,
         ~Category.name.ilike('%transfer%'),
         ~Category.name.ilike('%payment%')
     ).all()
     created = []
     
     for category in categories:
-        # Get spending history for suggestions
-        history = get_category_spending_history(category.id, months_to_analyze, db)
+        # Get spending/income history for suggestions
+        history = get_category_income_history(category.id, months_to_analyze, db) if category.is_income else get_category_spending_history(category.id, months_to_analyze, db)
         spending_months = [h for h in history if h > 0]
         
         if not spending_months:

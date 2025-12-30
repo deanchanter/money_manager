@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
@@ -12,4 +13,7 @@ class SavingsGoal(Base):
     target_date = Column(Date, nullable=True)
     icon = Column(String, default="🎯")
     color = Column(String, default="#10B981")
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    category = relationship("Category")

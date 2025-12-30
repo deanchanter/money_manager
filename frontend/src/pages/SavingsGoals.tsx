@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { getSavingsGoals, createSavingsGoal, updateSavingsGoal, addFundsToGoal, deleteSavingsGoal } from '../services/api';
-import type { SavingsGoal } from '../types';
+import { getSavingsGoals, createSavingsGoal, updateSavingsGoal, addFundsToGoal, deleteSavingsGoal, getCategories } from '../services/api';
+import type { SavingsGoal, Category } from '../types';
 import Modal from '../components/Modal';
 import ProgressBar from '../components/ProgressBar';
 
 export default function SavingsGoals() {
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFundModalOpen, setIsFundModalOpen] = useState(false);
@@ -19,14 +20,30 @@ export default function SavingsGoals() {
     target_date: '',
     icon: '🎯',
     color: '#10B981',
+    category_id: '',
   });
 
   const icons = ['🎯', '🏠', '🚗', '✈️', '📱', '💻', '🎓', '💍', '🏖️', '🎁', '🏦', '💰'];
   const colors = ['#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#EF4444', '#14B8A6', '#6366F1'];
 
   useEffect(() => {
-    loadGoals();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      const [goalsData, categoriesData] = await Promise.all([
+        getSavingsGoals(),
+        getCategories()
+      ]);
+      setGoals(goalsData);
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadGoals = async () => {
     try {
@@ -34,8 +51,6 @@ export default function SavingsGoals() {
       setGoals(data);
     } catch (error) {
       console.error('Failed to load goals:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -56,6 +71,7 @@ export default function SavingsGoals() {
         target_date: formData.target_date || null,
         icon: formData.icon,
         color: formData.color,
+        category_id: formData.category_id ? parseInt(formData.category_id) : null,
       };
 
       if (editingGoal) {
@@ -97,6 +113,7 @@ export default function SavingsGoals() {
       target_date: goal.target_date || '',
       icon: goal.icon,
       color: goal.color,
+      category_id: goal.category_id?.toString() || '',
     });
     setIsModalOpen(true);
   };
@@ -125,6 +142,7 @@ export default function SavingsGoals() {
       target_date: '',
       icon: '🎯',
       color: '#10B981',
+      category_id: '',
     });
   };
 
@@ -208,7 +226,7 @@ export default function SavingsGoals() {
                 </span>
               </div>
               
-              <div className="text-sm text-gray-500 mb-4">
+              <div className="text-sm text-gray-500 mb-2">
                 Remaining: {formatCurrency(goal.remaining)}
                 {goal.target_date && (
                   <span className="ml-2">
@@ -216,6 +234,17 @@ export default function SavingsGoals() {
                   </span>
                 )}
               </div>
+              
+              {goal.category && (
+                <div className="text-sm text-gray-500 mb-4 flex items-center gap-1">
+                  <span>Category:</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: goal.category.color + '20', color: goal.category.color }}>
+                    {goal.category.icon} {goal.category.name}
+                  </span>
+                </div>
+              )}
+              
+              {!goal.category && <div className="mb-4" />}
               
               {goal.percentage >= 100 && (
                 <div className="text-sm text-green-600 font-medium mb-4">
@@ -296,6 +325,21 @@ export default function SavingsGoals() {
               onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Category (optional)</label>
+            <select
+              value={formData.category_id}
+              onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
+            >
+              <option value="">No category</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon} {cat.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Icon</label>
