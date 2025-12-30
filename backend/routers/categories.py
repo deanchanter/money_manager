@@ -7,11 +7,11 @@ from schemas import CategoryCreate, CategoryResponse
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
-@router.get("/", response_model=List[CategoryResponse])
+@router.get("", response_model=List[CategoryResponse])
 def get_categories(db: Session = Depends(get_db)):
     return db.query(Category).all()
 
-@router.post("/", response_model=CategoryResponse)
+@router.post("", response_model=CategoryResponse)
 def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
     existing = db.query(Category).filter(Category.name == category.name).first()
     if existing:

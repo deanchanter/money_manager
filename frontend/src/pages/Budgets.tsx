@@ -43,7 +43,7 @@ export default function Budgets() {
         getTransactions({ start_date: startDate, end_date: endDate })
       ]);
       setBudgets(budgetData);
-      setCategories(categoryData.filter(c => !c.is_income && !c.name.toLowerCase().includes('transfer') && !c.name.toLowerCase().includes('payment')));
+      setCategories(categoryData.filter(c => !c.name.toLowerCase().includes('transfer') && !c.name.toLowerCase().includes('payment')));
       
       // Calculate monthly income (positive amounts, excluding transfers)
       const income = transactions
@@ -143,9 +143,9 @@ export default function Budgets() {
   };
 
   const handleAutoCreate = async () => {
-    if (!confirm('This will create budgets for all categories across all months with transactions. Continue?')) return;
+    if (!confirm('This will create budgets for all categories with spending history for the current month. Continue?')) return;
     try {
-      const result = await autoCreateBudgets(currentMonth, true);
+      const result = await autoCreateBudgets(currentMonth, false);
       alert(`Created ${result.created} budgets`);
       loadData();
     } catch (error) {
@@ -333,7 +333,7 @@ export default function Budgets() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Income Card */}
+        {/* Total Budget Card */}
         <div className="bg-white rounded-xl shadow-sm p-6 border border-green-300 bg-green-50">
           <div className="flex items-center justify-between mb-4">
             <div 
@@ -342,7 +342,7 @@ export default function Budgets() {
               title="View all transactions"
             >
               <span className="text-2xl">💰</span>
-              <span className="font-semibold text-lg hover:underline">Income</span>
+              <span className="font-semibold text-lg hover:underline">Total Budget</span>
             </div>
           </div>
           
@@ -373,10 +373,17 @@ export default function Budgets() {
           </div>
         </div>
 
-        {budgets.map(budget => (
+        {budgets.map(budget => {
+            const isIncome = budget.is_income;
+            const metGoal = isIncome && budget.spent >= budget.amount;
+            return (
             <div 
               key={budget.id} 
-              className={`bg-white rounded-xl shadow-sm p-6 border ${budget.is_over_budget ? 'border-red-300 bg-red-50' : budget.is_alert ? 'border-yellow-300 bg-yellow-50' : ''}`}
+              className={`bg-white rounded-xl shadow-sm p-6 border ${
+                isIncome 
+                  ? metGoal ? 'border-green-300 bg-green-50' : ''
+                  : budget.is_over_budget ? 'border-red-300 bg-red-50' : budget.is_alert ? 'border-yellow-300 bg-yellow-50' : ''
+              }`}
             >
               <div className="flex items-center justify-between mb-4">
                 <div 
@@ -386,6 +393,7 @@ export default function Budgets() {
                 >
                   <span className="text-2xl">{budget.category?.icon}</span>
                   <span className="font-semibold text-lg hover:underline">{budget.category?.name}</span>
+                  {isIncome && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Income</span>}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -406,38 +414,44 @@ export default function Budgets() {
               <div className="mb-4">
                 <ProgressBar 
                   percentage={budget.percentage} 
-                  color={budget.category?.color}
+                  color={isIncome ? '#22C55E' : budget.category?.color}
                   height="h-3"
                 />
               </div>
               
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">
-                  Spent: <span className="font-medium">{formatCurrency(budget.spent)}</span>
+                  {isIncome ? 'Earned' : 'Spent'}: <span className="font-medium">{formatCurrency(budget.spent)}</span>
                 </span>
                 <span className="text-gray-600">
-                  Budget: <span className="font-medium">{formatCurrency(budget.amount)}</span>
+                  {isIncome ? 'Goal' : 'Budget'}: <span className="font-medium">{formatCurrency(budget.amount)}</span>
                 </span>
               </div>
               
               <div className="mt-2 text-sm">
-                <span className={budget.remaining >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {budget.remaining >= 0 ? 'Remaining' : 'Over'}: {formatCurrency(Math.abs(budget.remaining))}
-                </span>
+                {isIncome ? (
+                  <span className={metGoal ? 'text-green-600' : 'text-gray-600'}>
+                    {metGoal ? 'Goal met!' : `${formatCurrency(budget.remaining)} to go`}
+                  </span>
+                ) : (
+                  <span className={budget.remaining >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {budget.remaining >= 0 ? 'Remaining' : 'Over'}: {formatCurrency(Math.abs(budget.remaining))}
+                  </span>
+                )}
               </div>
               
-              {budget.is_over_budget && (
+              {!isIncome && budget.is_over_budget && (
                 <div className="mt-3 text-sm text-red-600 font-medium">
                   Over budget by {formatCurrency(Math.abs(budget.remaining))}
                 </div>
               )}
-              {budget.is_alert && !budget.is_over_budget && (
+              {!isIncome && budget.is_alert && !budget.is_over_budget && (
                 <div className="mt-3 text-sm text-yellow-600 font-medium">
                   Warning: Approaching budget limit
                 </div>
               )}
             </div>
-          ))}
+          )})}
       </div>
 
       <Modal

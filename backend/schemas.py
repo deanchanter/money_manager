@@ -105,6 +105,7 @@ class BudgetResponse(BudgetBase):
     percentage: float = 0.0
     is_over_budget: bool = False
     is_alert: bool = False
+    is_income: bool = False
 
     class Config:
         from_attributes = True
@@ -117,6 +118,7 @@ class SavingsGoalBase(BaseModel):
     target_date: Optional[date] = None
     icon: str = "🎯"
     color: str = "#10B981"
+    category_id: Optional[int] = None
 
 class SavingsGoalCreate(SavingsGoalBase):
     pass
@@ -128,11 +130,13 @@ class SavingsGoalUpdate(BaseModel):
     target_date: Optional[date] = None
     icon: Optional[str] = None
     color: Optional[str] = None
+    category_id: Optional[int] = None
 
 class SavingsGoalResponse(SavingsGoalBase):
     id: int
     percentage: float = 0.0
     remaining: float = 0.0
+    category: Optional[CategoryResponse] = None
 
     class Config:
         from_attributes = True

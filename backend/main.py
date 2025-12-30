@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -6,7 +7,7 @@ import sys
 # Add backend directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from database import engine, Base
+from database import engine, Base, SessionLocal
 from models import Category, Transaction, Budget, SavingsGoal
 from routers import (
     transactions_router,
@@ -21,38 +22,17 @@ from routers import (
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(
-    title="Money Manager API",
-    description="API for personal finance management",
-    version="1.0.0"
-)
+# Add category_id column to savings_goals if it doesn't exist (migration)
+from sqlalchemy import text
+with engine.connect() as conn:
+    result = conn.execute(text("PRAGMA table_info(savings_goals)"))
+    columns = [row[1] for row in result]
+    if 'category_id' not in columns:
+        conn.execute(text("ALTER TABLE savings_goals ADD COLUMN category_id INTEGER REFERENCES categories(id)"))
+        conn.commit()
 
-# CORS middleware for frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include routers
-app.include_router(transactions_router)
-app.include_router(categories_router)
-app.include_router(budgets_router)
-app.include_router(savings_goals_router)
-app.include_router(analytics_router)
-app.include_router(import_export_router)
-app.include_router(accounts_router)
-
-@app.get("/")
-def root():
-    return {"message": "Money Manager API", "docs": "/docs"}
-
-@app.on_event("startup")
 def seed_default_categories():
     """Seed default categories if none exist"""
-    from database import SessionLocal
     db = SessionLocal()
     
     if db.query(Category).count() == 0:
@@ -79,6 +59,41 @@ def seed_default_categories():
         db.commit()
     
     db.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    seed_default_categories()
+    yield
+
+app = FastAPI(
+    title="Money Manager API",
+    description="API for personal finance management",
+    version="1.0.0",
+    lifespan=lifespan,
+    redirect_slashes=False
+)
+
+# CORS middleware for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(transactions_router)
+app.include_router(categories_router)
+app.include_router(budgets_router)
+app.include_router(savings_goals_router)
+app.include_router(analytics_router)
+app.include_router(import_export_router)
+app.include_router(accounts_router)
+
+@app.get("/")
+def root():
+    return {"message": "Money Manager API", "docs": "/docs"}
 
 def run():
     import uvicorn

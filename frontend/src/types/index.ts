@@ -60,6 +60,7 @@ export interface Budget {
   percentage: number;
   is_over_budget: boolean;
   is_alert: boolean;
+  is_income: boolean;
 }
 
 export interface BudgetSuggestion {
@@ -81,8 +82,10 @@ export interface SavingsGoal {
   target_date: string | null;
   icon: string;
   color: string;
+  category_id: number | null;
   percentage: number;
   remaining: number;
+  category: Category | null;
 }
 
 export interface SpendingByCategory {

@@ -25,6 +25,10 @@ export const getTransactions = (params?: { start_date?: string; end_date?: strin
 export const createTransaction = (data: Partial<Transaction>) => api.post<Transaction>('/transactions', data).then(res => res.data);
 export const updateTransaction = (id: number, data: Partial<Transaction>) => api.put<Transaction>(`/transactions/${id}`, data).then(res => res.data);
 export const deleteTransaction = (id: number) => api.delete(`/transactions/${id}`);
+export const bulkUpdateTransactions = (transactionIds: number[], data: { category_id?: number | null; notes?: string }) => 
+  api.post('/transactions/bulk-update', { transaction_ids: transactionIds, data }).then(res => res.data);
+export const bulkDeleteTransactions = (transactionIds: number[]) => 
+  api.post('/transactions/bulk-delete', { transaction_ids: transactionIds }).then(res => res.data);
 
 // Budgets
 export const getBudgets = (month?: string) => api.get<Budget[]>('/budgets', { params: { month } }).then(res => res.data);

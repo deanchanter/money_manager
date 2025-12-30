@@ -27,7 +27,7 @@ def calculate_account_balance(account: Account, db: Session) -> float:
     else:
         return account.starting_balance + total_change
 
-@router.get("/", response_model=List[AccountResponse])
+@router.get("", response_model=List[AccountResponse])
 def get_accounts(db: Session = Depends(get_db)):
     accounts = db.query(Account).all()
     result = []
@@ -61,7 +61,7 @@ def get_account(account_id: int, db: Session = Depends(get_db)):
         current_balance=round(balance, 2)
     )
 
-@router.post("/", response_model=AccountResponse)
+@router.post("", response_model=AccountResponse)
 def create_account(account: AccountCreate, db: Session = Depends(get_db)):
     existing = db.query(Account).filter(Account.name == account.name).first()
     if existing:
