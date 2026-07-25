@@ -5,7 +5,7 @@ import type { Transaction, Category } from '../types';
 import Modal from '../components/Modal';
 
 export default function Transactions() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);

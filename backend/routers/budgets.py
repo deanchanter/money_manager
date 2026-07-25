@@ -23,7 +23,10 @@ def calculate_budget_stats(budget: Budget, db: Session) -> dict:
     transactions = db.query(Transaction).filter(
         Transaction.category_id == budget.category_id,
         extract('year', Transaction.date) == year,
-        extract('month', Transaction.date) == month
+        extract('month', Transaction.date) == month,
+        # Money moved between the user's own accounts is not budgeted spending,
+        # and excluding it here keeps budgets agreeing with the dashboard.
+        Transaction.is_transfer.is_(False)
     ).all()
     
     amount = 0.0

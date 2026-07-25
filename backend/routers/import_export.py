@@ -8,6 +8,7 @@ import io
 from database import get_db
 from models import Transaction, Category, AutoCategoryRule
 from schemas import TransactionResponse
+from services.categorization import build_categorizer
 
 router = APIRouter(prefix="/api", tags=["import-export"])
 
@@ -73,28 +74,9 @@ async def import_csv(
                 return cat_id
         return None
     
-    def auto_categorize(description: str) -> Optional[int]:
-        description_lower = description.lower()
-        
-        # First check learned rules (higher priority)
-        learned_rules = db.query(AutoCategoryRule).order_by(AutoCategoryRule.priority.desc()).all()
-        for rule in learned_rules:
-            if rule.match_type == "exact" and rule.pattern == description_lower:
-                return rule.category_id
-            elif rule.match_type == "starts_with" and description_lower.startswith(rule.pattern):
-                return rule.category_id
-            elif rule.match_type == "contains" and rule.pattern in description_lower:
-                return rule.category_id
-        
-        # Fall back to category keywords
-        for category in categories:
-            if category.keywords:
-                keywords = [k.strip().lower() for k in category.keywords.split(",")]
-                for keyword in keywords:
-                    if keyword and keyword in description_lower:
-                        return category.id
-        return None
-    
+    # Shared with the SimpleFIN sync so both paths categorize identically
+    auto_categorize = build_categorizer(db)
+
     imported = 0
     errors = []
     

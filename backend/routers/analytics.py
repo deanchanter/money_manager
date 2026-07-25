@@ -8,6 +8,7 @@ from database import get_db
 from models import Transaction, Category, Budget
 from schemas import DashboardStats, SpendingByCategory, MonthlySpending, BudgetResponse
 from routers.budgets import calculate_budget_stats
+from services.classification import build_classifier
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -17,51 +18,15 @@ def get_all_time_balance(
     db: Session = Depends(get_db)
 ):
     """Get all-time net balance across all transactions"""
-    # Keywords that indicate transfers
-    transfer_keywords = ['transfer', 'zelle', 'venmo', 'paypal', 'payment to', 'payment from', 
-                        'credit card payment', 'card payment', 'payment thank', 'autopay']
-    income_keywords = ['salary', 'paycheck', 'direct deposit', 'payroll', 'dividend', 
-                      'interest earned', 'deposit from', 'ach deposit', 'tax refund']
-    
-    # Get transfer category IDs
-    transfer_categories = db.query(Category.id).filter(
-        Category.name.in_(["Transfer", "Credit Card Payment"])
-    ).all()
-    transfer_category_ids = [c.id for c in transfer_categories]
-    
-    all_transactions = db.query(Transaction).all()
-    
+    classifier = build_classifier(db)
+
     total_income = 0.0
     total_expenses = 0.0
-    
-    for t in all_transactions:
-        desc_lower = t.description.lower()
-        is_transfer = any(kw in desc_lower for kw in transfer_keywords)
-        is_transfer_category = t.category_id in transfer_category_ids
-        is_income_keyword = any(kw in desc_lower for kw in income_keywords)
-        is_income_category = t.category and t.category.is_income
-        is_credit_card = t.source == "credit_card"
-        is_inverted = t.sign_convention == "inverted"
-        
-        if is_transfer or is_transfer_category:
-            continue
-        
-        if is_credit_card:
-            if is_inverted:
-                if t.amount > 0:
-                    total_expenses += t.amount
-            else:
-                if t.amount < 0:
-                    total_expenses += abs(t.amount)
-            continue
-        
-        if t.amount < 0:
-            total_expenses += abs(t.amount)
-        elif is_income_keyword or is_income_category:
-            total_income += t.amount
-        else:
-            total_income += t.amount
-    
+
+    for t in db.query(Transaction).all():
+        total_expenses += classifier.expense_amount(t)
+        total_income += classifier.income_amount(t)
+
     net_balance = starting_balance + total_income - total_expenses
     
     return {
@@ -84,71 +49,25 @@ def get_dashboard_stats(
     if not end_date:
         end_date = date.today()
     
-    # Keywords that indicate transfers (should be excluded from both income and expenses)
-    transfer_keywords = ['transfer', 'zelle', 'venmo', 'paypal', 'payment to', 'payment from', 
-                        'credit card payment', 'card payment', 'payment thank', 'autopay']
-    # Keywords that indicate real income
-    income_keywords = ['salary', 'paycheck', 'direct deposit', 'payroll', 'dividend', 
-                      'interest earned', 'deposit from', 'ach deposit', 'tax refund']
-    
-    # Get all transactions in date range
+    classifier = build_classifier(db)
+
     all_transactions = db.query(Transaction).filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date
     ).all()
-    
+
     total_income = 0.0
     total_expenses = 0.0
     category_totals = {}  # category_id -> total expenses
-    
-    # Get transfer category IDs
-    transfer_categories = db.query(Category.id).filter(
-        Category.name.in_(["Transfer", "Credit Card Payment"])
-    ).all()
-    transfer_category_ids = [c.id for c in transfer_categories]
-    
+
     for t in all_transactions:
-        desc_lower = t.description.lower()
-        is_transfer = any(kw in desc_lower for kw in transfer_keywords)
-        is_transfer_category = t.category_id in transfer_category_ids
-        is_income_keyword = any(kw in desc_lower for kw in income_keywords)
-        is_income_category = t.category and t.category.is_income
-        is_credit_card = t.source == "credit_card"
-        is_inverted = t.sign_convention == "inverted"
-        
-        # Skip transfers entirely (credit card payments, zelle, etc)
-        if is_transfer or is_transfer_category:
-            continue
-        
-        # Determine if this transaction is an expense
-        # Credit card with inverted (Amex style): positive = expense
-        # Credit card with standard (Chase style): negative = expense
-        # Bank: negative = expense
-        if is_credit_card:
-            if is_inverted:
-                # Amex style: positive = expense, negative = payment (skip)
-                if t.amount > 0:
-                    total_expenses += t.amount
-                    if t.category_id:
-                        category_totals[t.category_id] = category_totals.get(t.category_id, 0) + t.amount
-            else:
-                # Chase style: negative = expense, positive = payment (skip)
-                if t.amount < 0:
-                    total_expenses += abs(t.amount)
-                    if t.category_id:
-                        category_totals[t.category_id] = category_totals.get(t.category_id, 0) + abs(t.amount)
-            continue
-        
-        # Bank/other: negative = expense, positive = income
-        if t.amount < 0:
-            total_expenses += abs(t.amount)
+        expense = classifier.expense_amount(t)
+        if expense:
+            total_expenses += expense
             if t.category_id:
-                category_totals[t.category_id] = category_totals.get(t.category_id, 0) + abs(t.amount)
-        elif is_income_keyword or is_income_category:
-            total_income += t.amount
-        else:
-            total_income += t.amount
-    
+                category_totals[t.category_id] = category_totals.get(t.category_id, 0) + expense
+        total_income += classifier.income_amount(t)
+
     # Spending by category
     spending_by_category = []
     for category_id, total in category_totals.items():
@@ -177,33 +96,11 @@ def get_dashboard_stats(
         
         month_income = 0.0
         month_expenses = 0.0
-        
+
         for t in month_transactions:
-            desc_lower = t.description.lower()
-            is_transfer = any(kw in desc_lower for kw in transfer_keywords)
-            is_transfer_category = t.category_id in transfer_category_ids
-            is_income_keyword = any(kw in desc_lower for kw in income_keywords)
-            is_income_category = t.category and t.category.is_income
-            is_credit_card = t.source == "credit_card"
-            is_inverted = t.sign_convention == "inverted"
-            
-            if is_transfer or is_transfer_category:
-                continue
-            if is_credit_card:
-                if is_inverted:
-                    if t.amount > 0:
-                        month_expenses += t.amount
-                else:
-                    if t.amount < 0:
-                        month_expenses += abs(t.amount)
-                continue
-            if t.amount < 0:
-                month_expenses += abs(t.amount)
-            elif is_income_keyword or is_income_category:
-                month_income += t.amount
-            else:
-                month_income += t.amount
-        
+            month_expenses += classifier.expense_amount(t)
+            month_income += classifier.income_amount(t)
+
         monthly_trend.append(MonthlySpending(
             month=month_start.strftime("%Y-%m"),
             income=round(month_income, 2),
@@ -260,7 +157,9 @@ def get_spending_by_category(
     ).join(Transaction, Transaction.category_id == Category.id).filter(
         Transaction.date >= start_date,
         Transaction.date <= end_date,
-        Transaction.amount < 0
+        Transaction.amount < 0,
+        Transaction.is_transfer.is_(False),
+        Category.is_transfer.is_(False)
     ).group_by(Category.id).order_by(func.sum(func.abs(Transaction.amount)).desc()).all()
     
     total = sum(r.total for r in results)
