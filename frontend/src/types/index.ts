@@ -6,6 +6,7 @@ export interface Account {
   starting_date: string | null;
   icon: string;
   color: string;
+  net_worth_group: string; // everyday | short_term | long_term
   current_balance: number;
 }
 
@@ -13,14 +14,20 @@ export interface AccountSummary {
   total_assets: number;
   total_liabilities: number;
   net_worth: number;
-  accounts: {
-    id: number;
-    name: string;
-    account_type: string;
-    icon: string;
-    color: string;
-    balance: number;
-  }[];
+  accounts: AccountBalance[];
+  short_term_accounts: AccountBalance[];
+  short_term_total: number;
+  long_term_accounts: AccountBalance[];
+  long_term_total: number;
+}
+
+export interface AccountBalance {
+  id: number;
+  name: string;
+  account_type: string;
+  icon: string;
+  color: string;
+  balance: number;
 }
 
 export interface Category {
@@ -29,6 +36,7 @@ export interface Category {
   icon: string;
   color: string;
   is_income: boolean;
+  is_transfer: boolean;
   keywords: string;
 }
 
@@ -112,4 +120,50 @@ export interface DashboardStats {
   spending_by_category: SpendingByCategory[];
   monthly_trend: MonthlySpending[];
   budget_alerts: Budget[];
+}
+
+// SimpleFIN
+export interface SimpleFinLinkedAccount {
+  account_id: number;
+  name: string;
+  account_type: string;
+  simplefin_account_id: string;
+  last_synced_at: string | null;
+}
+
+export interface SimpleFinStatus {
+  connected: boolean;
+  org_name: string | null;
+  endpoint: string | null;
+  last_synced_at: string | null;
+  linked_accounts: SimpleFinLinkedAccount[];
+}
+
+export interface SimpleFinRemoteAccount {
+  simplefin_account_id: string;
+  name: string;
+  balance: string;
+  currency: string;
+  org: string | null;
+  linked_account_id: number | null;
+  linked_account_name: string | null;
+}
+
+export interface SimpleFinSyncResult {
+  imported: number;
+  updated: number;
+  unchanged: number;
+  adopted: number;
+  skipped_unlinked: number;
+  transfers_detected: number;
+  accounts_synced: string[];
+  balances: {
+    account: string;
+    reported_balance: number;
+    starting_balance_set_to: number;
+    as_of: string | null;
+  }[];
+  unlinked_accounts: { simplefin_account_id: string; name: string; balance: string }[];
+  warnings: string[];
+  message: string;
 }

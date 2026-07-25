@@ -10,6 +10,7 @@ class AccountBase(BaseModel):
     starting_date: Optional[date] = None
     icon: str = "🏦"
     color: str = "#3B82F6"
+    net_worth_group: str = "everyday"  # everyday | short_term | long_term
 
 class AccountCreate(AccountBase):
     pass
@@ -21,6 +22,7 @@ class AccountUpdate(BaseModel):
     starting_date: Optional[date] = None
     icon: Optional[str] = None
     color: Optional[str] = None
+    net_worth_group: Optional[str] = None
 
 class AccountResponse(AccountBase):
     id: int
@@ -35,6 +37,7 @@ class CategoryBase(BaseModel):
     icon: str = "📁"
     color: str = "#6B7280"
     is_income: bool = False
+    is_transfer: bool = False  # excluded from income and expense totals
     keywords: str = ""
 
 class CategoryCreate(CategoryBase):

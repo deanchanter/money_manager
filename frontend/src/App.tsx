@@ -6,6 +6,7 @@ import SavingsGoals from './pages/SavingsGoals';
 import Accounts from './pages/Accounts';
 import Categories from './pages/Categories';
 import ImportData from './pages/ImportData';
+import Sync from './pages/Sync';
 
 function App() {
   return (
@@ -66,13 +67,21 @@ function App() {
                 >
                   Categories
                 </NavLink>
-                <NavLink 
-                  to="/import" 
-                  className={({ isActive }) => 
+                <NavLink
+                  to="/import"
+                  className={({ isActive }) =>
                     `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`
                   }
                 >
                   Import
+                </NavLink>
+                <NavLink
+                  to="/sync"
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`
+                  }
+                >
+                  Sync
                 </NavLink>
               </div>
             </div>
@@ -88,6 +97,7 @@ function App() {
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/import" element={<ImportData />} />
+            <Route path="/sync" element={<Sync />} />
           </Routes>
         </main>
       </div>

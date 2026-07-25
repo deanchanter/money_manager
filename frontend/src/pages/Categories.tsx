@@ -13,6 +13,7 @@ export default function Categories() {
     icon: '📁',
     color: '#6B7280',
     is_income: false,
+    is_transfer: false,
     keywords: '',
   });
 
@@ -59,6 +60,7 @@ export default function Categories() {
       icon: category.icon,
       color: category.color,
       is_income: category.is_income,
+      is_transfer: category.is_transfer ?? false,
       keywords: category.keywords,
     });
     setIsModalOpen(true);
@@ -80,6 +82,7 @@ export default function Categories() {
       icon: '📁',
       color: '#6B7280',
       is_income: false,
+    is_transfer: false,
       keywords: '',
     });
   };
@@ -279,6 +282,19 @@ export default function Categories() {
             />
             <label htmlFor="is_income" className="ml-2 block text-sm text-gray-700">
               This is an income category
+            </label>
+          </div>
+
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="is_transfer"
+              checked={formData.is_transfer}
+              onChange={(e) => setFormData({ ...formData, is_transfer: e.target.checked })}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="is_transfer" className="ml-2 block text-sm text-gray-700">
+              Money between my own accounts (excluded from income and expenses)
             </label>
           </div>
           

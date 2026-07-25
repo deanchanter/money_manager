@@ -1,31 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from typing import List
 from database import get_db
 from models import Account, Transaction
 from schemas import AccountCreate, AccountResponse, AccountUpdate
+from services.balances import calculate_account_balance
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
-
-def calculate_account_balance(account: Account, db: Session) -> float:
-    """Calculate current balance for an account"""
-    # Only count transactions after the starting date
-    query = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.account_id == account.id
-    )
-    
-    if account.starting_date:
-        query = query.filter(Transaction.date >= account.starting_date)
-    
-    total_change = query.scalar() or 0.0
-    
-    # For credit card accounts, we need to flip the sign
-    # Credit card: positive amounts are charges (reduce balance/increase debt)
-    if account.account_type == "credit_card":
-        return account.starting_balance - total_change
-    else:
-        return account.starting_balance + total_change
 
 @router.get("", response_model=List[AccountResponse])
 def get_accounts(db: Session = Depends(get_db)):
@@ -40,6 +21,7 @@ def get_accounts(db: Session = Depends(get_db)):
             starting_balance=account.starting_balance,
             icon=account.icon,
             color=account.color,
+            net_worth_group=account.net_worth_group or "everyday",
             current_balance=round(balance, 2)
         ))
     return result
@@ -58,6 +40,7 @@ def get_account(account_id: int, db: Session = Depends(get_db)):
         starting_balance=account.starting_balance,
         icon=account.icon,
         color=account.color,
+        net_worth_group=account.net_worth_group or "everyday",
         current_balance=round(balance, 2)
     )
 
@@ -79,6 +62,7 @@ def create_account(account: AccountCreate, db: Session = Depends(get_db)):
         starting_balance=db_account.starting_balance,
         icon=db_account.icon,
         color=db_account.color,
+        net_worth_group=db_account.net_worth_group or "everyday",
         current_balance=db_account.starting_balance
     )
 
@@ -103,6 +87,7 @@ def update_account(account_id: int, account: AccountUpdate, db: Session = Depend
         starting_balance=db_account.starting_balance,
         icon=db_account.icon,
         color=db_account.color,
+        net_worth_group=db_account.net_worth_group or "everyday",
         current_balance=round(balance, 2)
     )
 
@@ -128,27 +113,50 @@ def get_total_balance(db: Session = Depends(get_db)):
     
     total_assets = 0.0  # checking, savings, investment, cash
     total_liabilities = 0.0  # credit cards
-    
+    short_term_total = 0.0
+    long_term_total = 0.0
+
     account_balances = []
+    short_term_balances = []
+    long_term_balances = []
+
     for account in accounts:
         balance = calculate_account_balance(account, db)
-        account_balances.append({
+        entry = {
             "id": account.id,
             "name": account.name,
             "account_type": account.account_type,
             "icon": account.icon,
             "color": account.color,
             "balance": round(balance, 2)
-        })
-        
+        }
+        group = account.net_worth_group or "everyday"
+
+        # Long-term money is tracked but kept out of the headline figure.
+        # Short-term savings is liquid, so it counts -- just shown apart.
+        if group == "long_term":
+            long_term_balances.append(entry)
+            long_term_total += balance
+            continue
+
+        if group == "short_term":
+            short_term_balances.append(entry)
+            short_term_total += balance
+        else:
+            account_balances.append(entry)
+
         if account.account_type == "credit_card":
             total_liabilities += balance
         else:
             total_assets += balance
-    
+
     return {
         "total_assets": round(total_assets, 2),
         "total_liabilities": round(total_liabilities, 2),
         "net_worth": round(total_assets - total_liabilities, 2),
-        "accounts": account_balances
+        "accounts": account_balances,
+        "short_term_accounts": short_term_balances,
+        "short_term_total": round(short_term_total, 2),
+        "long_term_accounts": long_term_balances,
+        "long_term_total": round(long_term_total, 2)
     }

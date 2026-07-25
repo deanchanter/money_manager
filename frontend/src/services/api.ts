@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Account, AccountSummary, Category, Transaction, Budget, SavingsGoal, DashboardStats } from '../types';
+import type { Account, AccountSummary, Category, Transaction, Budget, SavingsGoal, DashboardStats, SimpleFinStatus, SimpleFinRemoteAccount, SimpleFinSyncResult } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -86,3 +86,28 @@ export const exportReport = () => api.get('/export/report', { responseType: 'blo
   link.click();
   link.remove();
 });
+
+// SimpleFIN
+export const getSimpleFinStatus = () =>
+  api.get<SimpleFinStatus>('/simplefin/status').then(res => res.data);
+
+export const getSimpleFinAccounts = () =>
+  api.get<{ accounts: SimpleFinRemoteAccount[]; errors: unknown[] }>('/simplefin/accounts').then(res => res.data);
+
+export const claimSimpleFinToken = (setupToken: string) =>
+  api.post('/simplefin/claim', { setup_token: setupToken }).then(res => res.data);
+
+export const linkSimpleFinAccount = (data: {
+  simplefin_account_id: string;
+  account_id?: number;
+  create_as?: string;
+  name?: string;
+}) => api.post('/simplefin/link', data).then(res => res.data);
+
+export const unlinkSimpleFinAccount = (accountId: number) =>
+  api.delete(`/simplefin/link/${accountId}`).then(res => res.data);
+
+export const syncSimpleFin = (days = 30, anchorBalances = true) =>
+  api.post<SimpleFinSyncResult>('/simplefin/sync', null, {
+    params: { days, anchor_balances: anchorBalances },
+  }).then(res => res.data);

@@ -7,8 +7,9 @@ import sys
 # Add backend directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from database import engine, Base, SessionLocal
-from models import Category, Transaction, Budget, SavingsGoal
+from bootstrap import init_db
+from database import SessionLocal
+from models import Category
 from routers import (
     transactions_router,
     categories_router,
@@ -16,20 +17,12 @@ from routers import (
     savings_goals_router,
     analytics_router,
     import_export_router,
-    accounts_router
+    accounts_router,
+    simplefin_router
 )
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
-# Add category_id column to savings_goals if it doesn't exist (migration)
-from sqlalchemy import text
-with engine.connect() as conn:
-    result = conn.execute(text("PRAGMA table_info(savings_goals)"))
-    columns = [row[1] for row in result]
-    if 'category_id' not in columns:
-        conn.execute(text("ALTER TABLE savings_goals ADD COLUMN category_id INTEGER REFERENCES categories(id)"))
-        conn.commit()
+# Create database tables and apply migrations
+init_db()
 
 def seed_default_categories():
     """Seed default categories if none exist"""
@@ -90,6 +83,7 @@ app.include_router(savings_goals_router)
 app.include_router(analytics_router)
 app.include_router(import_export_router)
 app.include_router(accounts_router)
+app.include_router(simplefin_router)
 
 @app.get("/")
 def root():

@@ -15,6 +15,7 @@ export default function Accounts() {
     starting_date: '',
     icon: '🏦',
     color: '#3B82F6',
+    net_worth_group: 'everyday',
   });
 
   const accountTypes = [
@@ -87,6 +88,7 @@ export default function Accounts() {
       starting_date: account.starting_date || '',
       icon: account.icon,
       color: account.color,
+      net_worth_group: account.net_worth_group || 'everyday',
     });
     setIsModalOpen(true);
   };
@@ -110,6 +112,7 @@ export default function Accounts() {
       starting_date: '',
       icon: '🏦',
       color: '#3B82F6',
+      net_worth_group: 'everyday',
     });
   };
 
@@ -119,15 +122,24 @@ export default function Accounts() {
     setIsModalOpen(true);
   };
 
-  const totalAssets = accounts
+  // Mirrors the backend: accounts opted out of net worth are summarised
+  // separately rather than folded into assets.
+  const countedAccounts = accounts.filter(a => a.net_worth_group !== 'long_term');
+  const shortTermAccounts = accounts.filter(a => a.net_worth_group === 'short_term');
+  const excludedAccounts = accounts.filter(a => a.net_worth_group === 'long_term');
+
+  const totalAssets = countedAccounts
     .filter(a => a.account_type !== 'credit_card')
     .reduce((sum, a) => sum + a.current_balance, 0);
-  
-  const totalLiabilities = accounts
+
+  const totalLiabilities = countedAccounts
     .filter(a => a.account_type === 'credit_card')
     .reduce((sum, a) => sum + a.current_balance, 0);
 
   const netWorth = totalAssets - totalLiabilities;
+
+  const excludedTotal = excludedAccounts.reduce((sum, a) => sum + a.current_balance, 0);
+  const shortTermTotal = shortTermAccounts.reduce((sum, a) => sum + a.current_balance, 0);
 
   if (loading) {
     return (
@@ -166,6 +178,26 @@ export default function Accounts() {
             </p>
           </div>
         </div>
+        {(shortTermAccounts.length > 0 || excludedAccounts.length > 0) && (
+          <div className="pt-4 mt-4 border-t border-blue-500 space-y-1">
+            {shortTermAccounts.length > 0 && (
+              <div className="flex items-baseline justify-between">
+                <span className="text-blue-100 text-sm">
+                  Short-term savings ({shortTermAccounts.length}, included above)
+                </span>
+                <span className="text-lg font-semibold">{formatCurrency(shortTermTotal)}</span>
+              </div>
+            )}
+            {excludedAccounts.length > 0 && (
+              <div className="flex items-baseline justify-between">
+                <span className="text-blue-100 text-sm">
+                  Long-term savings ({excludedAccounts.length}, not counted above)
+                </span>
+                <span className="text-lg font-semibold">{formatCurrency(excludedTotal)}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {accounts.length === 0 ? (
@@ -320,6 +352,26 @@ export default function Accounts() {
             </div>
           </div>
           
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Grouping</label>
+            <select
+              value={formData.net_worth_group}
+              onChange={(e) => setFormData({ ...formData, net_worth_group: e.target.value })}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
+            >
+              <option value="everyday">Everyday — spending accounts</option>
+              <option value="short_term">Short-term savings — emergency fund, sinking funds</option>
+              <option value="long_term">Long-term savings — retirement, not counted in net worth</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {formData.net_worth_group === 'long_term'
+                ? 'Tracked and totalled separately, but left out of net worth.'
+                : formData.net_worth_group === 'short_term'
+                ? 'Counted in net worth and shown on its own line.'
+                : 'Counted in net worth alongside your other spending accounts.'}
+            </p>
+          </div>
+
           <div className="flex justify-end gap-2">
             <button
               type="button"

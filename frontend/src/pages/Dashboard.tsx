@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
 import { getDashboardStats, getAccountSummary, exportCSV, exportReport } from '../services/api';
-import type { DashboardStats, AccountSummary } from '../types';
+import type { DashboardStats, AccountSummary, AccountBalance } from '../types';
 import StatCard from '../components/StatCard';
 import ProgressBar from '../components/ProgressBar';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -44,13 +47,6 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
   };
 
   if (loading) {
@@ -167,6 +163,25 @@ export default function Dashboard() {
               No accounts yet. <a href="/accounts" className="underline">Add accounts</a> to track balances.
             </p>
           )}
+          {(accountSummary.short_term_accounts?.length > 0 ||
+            accountSummary.long_term_accounts?.length > 0) && (
+            <div className="pt-4 mt-4 border-t border-blue-500 space-y-3">
+              {accountSummary.short_term_accounts?.length > 0 && (
+                <AccountGroup
+                  label="Short-term savings (included above)"
+                  total={accountSummary.short_term_total}
+                  accounts={accountSummary.short_term_accounts}
+                />
+              )}
+              {accountSummary.long_term_accounts?.length > 0 && (
+                <AccountGroup
+                  label="Long-term savings (not counted above)"
+                  total={accountSummary.long_term_total}
+                  accounts={accountSummary.long_term_accounts}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -278,6 +293,32 @@ export default function Dashboard() {
         ) : (
           <p className="text-gray-500 text-center py-8">No spending data yet. Import transactions to get started!</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function AccountGroup({
+  label,
+  total,
+  accounts,
+}: {
+  label: string;
+  total: number;
+  accounts: AccountBalance[];
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="text-blue-100 text-sm">{label}</span>
+        <span className="text-lg font-semibold">{formatCurrency(total)}</span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+        {accounts.map(account => (
+          <span key={account.id} className="text-sm text-blue-100">
+            {account.icon} {account.name} {formatCurrency(account.balance)}
+          </span>
+        ))}
       </div>
     </div>
   );
